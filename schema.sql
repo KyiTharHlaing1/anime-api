@@ -1,0 +1,9 @@
+CREATE TABLE animes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255),
+  description TEXT,
+  image_url TEXT,
+  genre VARCHAR(100),
+  rating FLOAT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
