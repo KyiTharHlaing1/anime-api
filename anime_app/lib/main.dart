@@ -5,8 +5,7 @@ import 'package:http/http.dart' as http;
 void main() => runApp(const MyApp());
 
 // ================= API 配置 =================
-// 已经替换为你测试通过的 Vercel 域名
-const String domain = "https://anime-api-pied-tau.vercel.app";
+const String domain = "https://anime-api-jjsm.vercel.app";
 const String baseUrl = "$domain/api/animes";
 const String loginUrl = "$domain/api/login";
 
@@ -63,7 +62,6 @@ class _LoginPageState extends State<LoginPage> {
 
       if (response.statusCode == 200 && data['status'] == 'ok') {
         if (!mounted) return;
-        // 登录成功，进入主列表
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -74,7 +72,7 @@ class _LoginPageState extends State<LoginPage> {
         showError(data['message'] ?? "Login Failed");
       }
     } catch (e) {
-      showError("Connection Error: Check if your Vercel backend is awake.");
+      showError("Connection Error: Check if Vercel is awake.");
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -92,50 +90,51 @@ class _LoginPageState extends State<LoginPage> {
       appBar: AppBar(title: const Text("Anime Login")),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.cloud_done, size: 100, color: Colors.indigo),
-            const SizedBox(height: 10),
-            const Text(
-              "Cloud Database Mode",
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 40),
-            TextField(
-              controller: userCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Username',
-                prefixIcon: Icon(Icons.person),
-                border: OutlineInputBorder(),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              const SizedBox(height: 50),
+              const Icon(Icons.cloud_done, size: 100, color: Colors.indigo),
+              const Text(
+                "Cloud Database Mode",
+                style: TextStyle(color: Colors.grey),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                prefixIcon: Icon(Icons.lock),
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: isLoading ? null : login,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.indigo,
-                  foregroundColor: Colors.white,
+              const SizedBox(height: 40),
+              TextField(
+                controller: userCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  prefixIcon: Icon(Icons.person),
+                  border: OutlineInputBorder(),
                 ),
-                child: isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Login", style: TextStyle(fontSize: 18)),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: passCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: Icon(Icons.lock),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: isLoading ? null : login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("Login", style: TextStyle(fontSize: 18)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -199,6 +198,20 @@ class _AnimeListPageState extends State<AnimeListPage> {
               ),
             ),
             ListTile(
+              leading: const Icon(Icons.account_box),
+              title: const Text("My Profile"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfilePage(username: widget.username),
+                  ),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text("Logout"),
               onTap: () => Navigator.pushReplacement(
@@ -239,12 +252,104 @@ class _AnimeListPageState extends State<AnimeListPage> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text("Rating: ⭐ ${item['rating']}"),
-                      trailing: const Icon(Icons.chevron_right),
+                      // ✨ 这里是你的“加减打分按钮”
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.remove_circle_outline,
+                              color: Colors.red,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                double r =
+                                    double.tryParse(
+                                      item['rating'].toString(),
+                                    ) ??
+                                    0.0;
+                                item['rating'] = (r - 0.1).toStringAsFixed(1);
+                              });
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.add_circle_outline,
+                              color: Colors.green,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                double r =
+                                    double.tryParse(
+                                      item['rating'].toString(),
+                                    ) ??
+                                    0.0;
+                                item['rating'] = (r + 0.1).toStringAsFixed(1);
+                              });
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
               ),
             ),
+    );
+  }
+}
+
+// ================= 3. 个人资料页面 =================
+class ProfilePage extends StatelessWidget {
+  final String username;
+  const ProfilePage({super.key, required this.username});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("User Profile")),
+      body: Center(
+        child: Column(
+          children: [
+            const SizedBox(height: 40),
+            const CircleAvatar(
+              radius: 60,
+              backgroundColor: Colors.indigo,
+              child: Icon(Icons.person, size: 80, color: Colors.white),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              username,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const Text("Anime Critic", style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 30),
+            const Card(
+              margin: EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(Icons.email),
+                    title: Text("Email"),
+                    subtitle: Text("admin@anime.com"),
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.star),
+                    title: Text("Membership"),
+                    subtitle: Text("VIP Gold Member"),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Back to List"),
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
     );
   }
 }
