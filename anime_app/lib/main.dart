@@ -6,7 +6,9 @@ void main() {
   runApp(const MyApp());
 }
 
-const String baseUrl = "https://anime-api-sigma-inky.vercel.app/api/animes";
+// ✅ 本地后端地址
+const String baseUrl = "http://10.0.2.2:3333/api/animes";
+const String loginUrl = "http://10.0.2.2:3333/api/login";
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -14,14 +16,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Anime App',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      theme: ThemeData(primarySwatch: Colors.indigo, useMaterial3: true),
       home: const LoginPage(),
     );
   }
 }
 
-// ================= LOGIN PAGE =================
+// ================= 1. 登录页面 (Login Screen) =================
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -32,98 +35,104 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
-
   bool loading = false;
 
-  Future login() async {
-    setState(() {
-      loading = true;
-    });
-
-    final response = await http.post(
-      Uri.parse('http://10.0.2.2:3333/api/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': usernameController.text,
-        'password': passwordController.text,
-      }),
-    );
-
-    final data = jsonDecode(response.body);
-
-    setState(() {
-      loading = false;
-    });
-
-    if (response.statusCode == 200 && data['status'] == 'ok') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AnimeListPage()),
-      );
-    } else {
+  Future<void> login() async {
+    if (usernameController.text.isEmpty || passwordController.text.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Login Failed')));
+      ).showSnackBar(const SnackBar(content: Text('Please enter info')));
+      return;
+    }
+
+    setState(() => loading = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse(loginUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'username': usernameController.text,
+          'password': passwordController.text,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['status'] == 'ok') {
+        if (!mounted) return;
+        // 🚀 核心改动：登录成功，带着用户信息跳转
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AnimeListPage(username: usernameController.text),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Login Failed')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() => loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                "Anime Login",
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+      appBar: AppBar(title: const Text("Anime Login")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.movie_filter, size: 80, color: Colors.indigo),
+            const SizedBox(height: 30),
+            TextField(
+              controller: usernameController,
+              decoration: const InputDecoration(
+                labelText: 'Username',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
               ),
-
-              const SizedBox(height: 30),
-
-              TextField(
-                controller: usernameController,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  border: OutlineInputBorder(),
-                ),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock),
               ),
-
-              const SizedBox(height: 20),
-
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                ),
+            ),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: loading ? null : login,
+                child: loading
+                    ? const CircularProgressIndicator()
+                    : const Text('Login'),
               ),
-
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: loading ? null : login,
-                  child: loading
-                      ? const CircularProgressIndicator()
-                      : const Text('Login'),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ================= LIST PAGE =================
+// ================= 2. 列表页面 (Data Display Screen) =================
 class AnimeListPage extends StatefulWidget {
-  const AnimeListPage({super.key});
+  final String username; // 接收用户名
+  const AnimeListPage({super.key, required this.username});
 
   @override
   State<AnimeListPage> createState() => _AnimeListPageState();
@@ -131,6 +140,7 @@ class AnimeListPage extends StatefulWidget {
 
 class _AnimeListPageState extends State<AnimeListPage> {
   List animes = [];
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -138,61 +148,89 @@ class _AnimeListPageState extends State<AnimeListPage> {
     fetchAnimes();
   }
 
-  Future fetchAnimes() async {
+  Future<void> fetchAnimes() async {
     try {
       final res = await http.get(Uri.parse(baseUrl));
-      setState(() {
-        animes = jsonDecode(res.body);
-      });
+      if (res.statusCode == 200) {
+        setState(() {
+          animes = jsonDecode(res.body);
+          isLoading = false;
+        });
+      }
     } catch (e) {
-      debugPrint("获取数据失败: $e");
+      setState(() => isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Anime List"),
-        // ✨ 这里是新加入的 Logout 按钮
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              // 彻底退出：跳转并移除之前所有的页面栈
-              Navigator.pushAndRemoveUntil(
+      appBar: AppBar(title: const Text("My Anime List")),
+      // ✨ 这里就是你的 Profile 入口：侧边栏
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            UserAccountsDrawerHeader(
+              decoration: const BoxDecoration(color: Colors.indigo),
+              accountName: Text(
+                widget.username,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              accountEmail: const Text("Status: Online"),
+              currentAccountPicture: const CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Icon(Icons.person, size: 40, color: Colors.indigo),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text("My Profile"),
+              onTap: () {
+                Navigator.pop(context); // 关抽屉
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfilePage(username: widget.username),
+                  ),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text("Logout"),
+              onTap: () => Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (_) => const LoginPage()),
-                (route) => false, // 这会让之前的页面全部失效
-              );
-            },
-          ),
-        ],
+              ),
+            ),
+          ],
+        ),
       ),
-      body: animes.isEmpty
+      body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
               itemCount: animes.length,
               itemBuilder: (context, index) {
                 final anime = animes[index];
                 return Card(
-                  margin: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   child: ListTile(
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        anime['image_url'],
-                        width: 50,
-                        height: 50,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.broken_image),
-                      ),
+                    leading: Image.network(
+                      anime['image_url'] ?? '',
+                      width: 50,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.movie),
                     ),
-                    title: Text(anime['title']),
-                    subtitle: Text(
-                      "⭐ ${(anime['rating'] as num).toDouble().toStringAsFixed(1)}",
-                    ),
+                    title: Text(anime['title'] ?? 'Unknown'),
+                    subtitle: Text("⭐ ${anime['rating'] ?? '0.0'}"),
                     onTap: () async {
                       await Navigator.push(
                         context,
@@ -200,7 +238,7 @@ class _AnimeListPageState extends State<AnimeListPage> {
                           builder: (_) => DetailPage(anime: anime),
                         ),
                       );
-                      fetchAnimes(); // 从详情页返回后自动刷新列表
+                      fetchAnimes();
                     },
                   ),
                 );
@@ -210,74 +248,127 @@ class _AnimeListPageState extends State<AnimeListPage> {
   }
 }
 
-// ================= DETAIL PAGE =================
+// ================= 3. 个人信息页面 (Profile Screen) =================
+class ProfilePage extends StatelessWidget {
+  final String username;
+  const ProfilePage({super.key, required this.username});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Profile")),
+      body: Center(
+        child: Column(
+          children: [
+            const SizedBox(height: 50),
+            const CircleAvatar(
+              radius: 60,
+              backgroundColor: Colors.indigo,
+              child: Icon(Icons.person, size: 70, color: Colors.white),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              username,
+              style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+            ),
+            const Text(
+              "Anime Enthusiast",
+              style: TextStyle(color: Colors.grey),
+            ),
+            const Padding(padding: EdgeInsets.all(30), child: Divider()),
+            const ListTile(
+              leading: Icon(Icons.email),
+              title: Text("Email"),
+              subtitle: Text("admin@example.com"),
+            ),
+            const ListTile(
+              leading: Icon(Icons.location_on),
+              title: Text("Location"),
+              subtitle: Text("TiDB Cloud Server"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ================= 4. 详情页面 =================
 class DetailPage extends StatelessWidget {
   final Map anime;
-
   const DetailPage({super.key, required this.anime});
 
-  Future updateRating(int id, double newRating) async {
-    await http.patch(
-      Uri.parse("$baseUrl/$id/rating"),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'rating': newRating}),
-    );
+  Future<void> updateRating(BuildContext context, double newRating) async {
+    try {
+      final response = await http.patch(
+        Uri.parse("$baseUrl/${anime['id']}/rating"),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'rating': newRating}),
+      );
+      if (response.statusCode == 200) Navigator.pop(context);
+    } catch (e) {
+      debugPrint("Update Error: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    double current = (anime['rating'] as num).toDouble();
-
+    double current = double.tryParse(anime['rating'].toString()) ?? 0.0;
     return Scaffold(
       appBar: AppBar(title: Text(anime['title'])),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      body: SingleChildScrollView(
         child: Column(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.network(
-                anime['image_url'],
-                height: 200,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.broken_image, size: 100);
-                },
+            Image.network(
+              anime['image_url'] ?? '',
+              height: 300,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.broken_image, size: 100),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    anime['title'],
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(anime['description'] ?? 'No description'),
+                  const SizedBox(height: 20),
+                  Text(
+                    "Current Rating: ⭐ ${current.toStringAsFixed(1)}",
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                  const SizedBox(height: 30),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () =>
+                            updateRating(context, (current - 0.5).clamp(0, 10)),
+                        icon: const Icon(Icons.remove),
+                        label: const Text("0.5"),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () =>
+                            updateRating(context, (current + 0.5).clamp(0, 10)),
+                        icon: const Icon(Icons.add),
+                        label: const Text("0.5"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(anime['title'], style: const TextStyle(fontSize: 20)),
-            Text(anime['description']),
-            const SizedBox(height: 10),
-            Text(
-              "⭐ ${current.toStringAsFixed(1)}",
-              style: const TextStyle(fontSize: 18),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🔥 +1 / -1 buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: () async {
-                    double newRating = (current - 1).clamp(0, 5);
-                    await updateRating(anime['id'], newRating);
-                    Navigator.pop(context);
-                  },
-                  child: const Text("-1 ⭐"),
-                ),
-                const SizedBox(width: 20),
-                ElevatedButton(
-                  onPressed: () async {
-                    double newRating = (current + 1).clamp(0, 5);
-                    await updateRating(anime['id'], newRating);
-                    Navigator.pop(context);
-                  },
-                  child: const Text("+1 ⭐"),
-                ),
-              ],
             ),
           ],
         ),
