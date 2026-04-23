@@ -18,19 +18,20 @@ app.use(cors());
 app.use(express.json());
 
 const animeRoutes = require('./routes/animes');
+const loginRoutes = require('./routes/login');
 
 app.use('/api/animes', animeRoutes);
+app.use('/api/login', loginRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Anime API running' });
 });
 
+// 🔥 VERY IMPORTANT
 const PORT = 3333;
 
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
 module.exports = app;
