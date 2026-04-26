@@ -144,6 +144,7 @@ class _LoginPageState extends State<LoginPage> {
 // ================= 2. 动漫列表页面 =================
 class AnimeListPage extends StatefulWidget {
   final String username;
+
   const AnimeListPage({super.key, required this.username});
 
   @override
@@ -154,6 +155,21 @@ class _AnimeListPageState extends State<AnimeListPage> {
   List animes = [];
   bool loading = true;
 
+  // ✅ 新增：更新评分 API
+  Future<void> updateRating(int id, double rating) async {
+    try {
+      final response = await http.patch(
+        Uri.parse("$baseUrl/$id/rating"),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'rating': rating}),
+      );
+
+      print("Updated: ${response.body}");
+    } catch (e) {
+      print("Update failed: $e");
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -163,6 +179,7 @@ class _AnimeListPageState extends State<AnimeListPage> {
   Future<void> loadAnimes() async {
     try {
       final res = await http.get(Uri.parse(baseUrl));
+
       if (res.statusCode == 200) {
         setState(() {
           animes = jsonDecode(res.body);
@@ -230,6 +247,7 @@ class _AnimeListPageState extends State<AnimeListPage> {
                 itemCount: animes.length,
                 itemBuilder: (context, i) {
                   final item = animes[i];
+
                   return Card(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -252,40 +270,52 @@ class _AnimeListPageState extends State<AnimeListPage> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text("Rating: ⭐ ${item['rating']}"),
-                      // ✨ 这里是你的“加减打分按钮”
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // ✅ 减评分
                           IconButton(
                             icon: const Icon(
                               Icons.remove_circle_outline,
                               color: Colors.red,
                             ),
-                            onPressed: () {
+                            onPressed: () async {
+                              double r =
+                                  double.tryParse(item['rating'].toString()) ??
+                                  0.0;
+
+                              double newRating = double.parse(
+                                (r - 0.1).toStringAsFixed(1),
+                              );
+
                               setState(() {
-                                double r =
-                                    double.tryParse(
-                                      item['rating'].toString(),
-                                    ) ??
-                                    0.0;
-                                item['rating'] = (r - 0.1).toStringAsFixed(1);
+                                item['rating'] = newRating;
                               });
+
+                              await updateRating(item['id'], newRating);
                             },
                           ),
+
+                          // ✅ 加评分
                           IconButton(
                             icon: const Icon(
                               Icons.add_circle_outline,
                               color: Colors.green,
                             ),
-                            onPressed: () {
+                            onPressed: () async {
+                              double r =
+                                  double.tryParse(item['rating'].toString()) ??
+                                  0.0;
+
+                              double newRating = double.parse(
+                                (r + 0.1).toStringAsFixed(1),
+                              );
+
                               setState(() {
-                                double r =
-                                    double.tryParse(
-                                      item['rating'].toString(),
-                                    ) ??
-                                    0.0;
-                                item['rating'] = (r + 0.1).toStringAsFixed(1);
+                                item['rating'] = newRating;
                               });
+
+                              await updateRating(item['id'], newRating);
                             },
                           ),
                         ],
