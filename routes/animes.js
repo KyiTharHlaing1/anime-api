@@ -2,76 +2,106 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-
 // ✅ GET ALL
 router.get('/', async (req, res) => {
-  const [rows] = await db.query('SELECT * FROM animes');
-  res.json(rows);
+  try {
+    const [rows] = await db.query('SELECT * FROM animes');
+    res.json(rows);
+  } catch (err) {
+    console.error('GET ALL ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
-
 
 // ✅ GET BY ID
 router.get('/:id', async (req, res) => {
-  const [rows] = await db.query(
-    'SELECT * FROM animes WHERE id = ?',
-    [req.params.id]
-  );
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM animes WHERE id = ?',
+      [req.params.id]
+    );
 
-  if (rows.length === 0) {
-    return res.status(404).json({ error: 'Not found' });
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('GET BY ID ERROR:', err);
+    res.status(500).json({ error: err.message });
   }
-
-  res.json(rows[0]);
 });
-
 
 // ✅ CREATE
 router.post('/', async (req, res) => {
-  const { title, description, image_url, genre, rating } = req.body;
+  try {
+    const { title, description, image_url, genre, rating } = req.body;
 
-  const [result] = await db.query(
-    'INSERT INTO animes (title, description, image_url, genre, rating) VALUES (?, ?, ?, ?, ?)',
-    [title, description, image_url, genre, rating]
-  );
+    const [result] = await db.query(
+      'INSERT INTO animes (title, description, image_url, genre, rating) VALUES (?, ?, ?, ?, ?)',
+      [title, description, image_url, genre, rating]
+    );
 
-  res.status(201).json({ id: result.insertId });
+    res.status(201).json({ id: result.insertId });
+  } catch (err) {
+    console.error('CREATE ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
-
 
 // ✅ UPDATE
 router.put('/:id', async (req, res) => {
-  const { title, description, image_url, genre, rating } = req.body;
+  try {
+    const { title, description, image_url, genre, rating } = req.body;
 
-  await db.query(
-    'UPDATE animes SET title=?, description=?, image_url=?, genre=?, rating=? WHERE id=?',
-    [title, description, image_url, genre, rating, req.params.id]
-  );
+    await db.query(
+      'UPDATE animes SET title=?, description=?, image_url=?, genre=?, rating=? WHERE id=?',
+      [title, description, image_url, genre, rating, req.params.id]
+    );
 
-  res.json({ message: 'Updated' });
+    res.json({ message: 'Updated' });
+  } catch (err) {
+    console.error('UPDATE ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
-
 
 // ✅ DELETE
 router.delete('/:id', async (req, res) => {
-  await db.query(
-    'DELETE FROM animes WHERE id=?',
-    [req.params.id]
-  );
+  try {
+    await db.query(
+      'DELETE FROM animes WHERE id=?',
+      [req.params.id]
+    );
 
-  res.json({ message: 'Deleted' });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    console.error('DELETE ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-
-// ⭐ UPDATE RATING（作業重點）
+// ⭐ UPDATE RATING
 router.patch('/:id/rating', async (req, res) => {
-  const { rating } = req.body;
+  try {
+    const { rating } = req.body;
 
-  await db.query(
-    'UPDATE animes SET rating=? WHERE id=?',
-    [rating, req.params.id]
-  );
+    if (rating === undefined) {
+      return res.status(400).json({
+        error: 'Rating missing'
+      });
+    }
 
-  res.json({ message: 'Rating updated' });
+    await db.query(
+      'UPDATE animes SET rating=? WHERE id=?',
+      [rating, req.params.id]
+    );
+
+    res.json({ message: 'Rating updated' });
+  } catch (err) {
+    console.error('PATCH ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
