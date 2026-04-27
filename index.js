@@ -19,9 +19,12 @@ app.use(express.json());
 
 const animeRoutes = require('./routes/animes');
 const loginRoutes = require('./routes/login');
+const userRoutes = require('./routes/user'); 
 
 app.use('/api/animes', animeRoutes);
 app.use('/api/login', loginRoutes);
+app.use('/api/user', userRoutes); // ✅ 新增
+
 
 app.get('/', (req, res) => {
   res.json({ message: 'Anime API running' });
